@@ -29,7 +29,7 @@
 #define MNIAM_SIZE_GLUE 200
 
 #define MNIAM_TRANSISTOR_WAGE 30.0
-#define MNIAM_PLAYER_WAGE 30.0
+#define MNIAM_PLAYER_WAGE 40.0
 
 const char* name = "Testowanko.";
 const char* helloMSG = "Bedziemy sie potykac.";
@@ -80,6 +80,9 @@ size_t magic_algorithm(uint8_t* buf) {
   for(uint8_t i = 0; i < MNIAM_MAX_PLAYER; i++) { // najbliższy gracz o mniejszym hp
     if(players[i].objectType == MNIAM_TYPE_PLAYER) {
       if(players[i].hp >= players[gameStats.playerNumber].hp) {
+        continue;
+      }
+      if(players[i].hp == 0) {
         continue;
       }
       if(players[i].objectNo == gameStats.playerNumber) {
