@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
+#include <float.h>
 
 #include <FreeRTOS.h>
 #include <FreeRTOS_IP.h>
@@ -22,14 +24,142 @@ static AMCOM_ObjectState glue[8];
 static AMCOM_ObjectState spark[24];
 
 size_t magic_algorithm(uint8_t* buf) {
+    AMCOM_MoveResponsePayload response;
+    response.angle = 0.0f;
+    response.action = 0;
 
-	(void)buf; // zamist tego trzeba obmyslać strategie
+    // Read current player stats
+    uint8_t myID = gameStats.playerNumber;
+    float myX = players[myID].x;
+    float myY = players[myID].y;
+    int8_t myHp = players[myID].hp;
 
-	AMCOM_MoveResponsePayload response;
-	response.angle = 0;
-	response.action = 0;
-	return AMCOM_Serialize(AMCOM_MOVE_RESPONSE, &response, sizeof(response), buf);
-};
+    // If the player is dead, send an empty response and skip calculations
+    if (myHp <= 0) {
+        return AMCOM_Serialize(AMCOM_MOVE_RESPONSE, &response, sizeof(response), buf);
+    }
+
+    // Retain movement vectors between frames for smooth turning
+    static float momentumX = 0.0f;
+    static float momentumY = 0.0f;
+    
+    float currentSumX = 0.0f;
+    float currentSumY = 0.0f;
+    
+    // Flag to determine if we should drop a defensive spark
+    uint8_t shouldDropSpark = 0;
+
+    // Check if there is any food left on the map
+    int foodAvailable = 0;
+    for (int i = 0; i < 100; i++) {
+        if (transistors[i].hp > 0) {
+            foodAvailable = 1;
+            break;
+        }
+    }
+
+    // --- 1. TRANSISTORS (Food Attraction) ---
+    for (int i = 0; i < 100; i++) {
+        if (transistors[i].hp > 0) {
+            float dx = transistors[i].x - myX;
+            float dy = transistors[i].y - myY;
+            float distSq = dx * dx + dy * dy;
+
+            if (distSq > 1.0f) {
+                currentSumX += dx * (30000.0f / distSq);
+                currentSumY += dy * (30000.0f / distSq);
+            }
+        }
+    }
+
+    // --- 2. PLAYERS (Hunter vs Prey Logic) ---
+    // Expand vision to the whole map if food is gone, otherwise focus locally
+    float preySearchRadius = foodAvailable ? 10000.0f : (gameStats.mapWidth * gameStats.mapWidth + gameStats.mapHeight * gameStats.mapHeight);
+    
+    // Fear radius (approx. 200 pixels). Ignore stronger players if they are far away!
+    float fearRadiusSq = 40000.0f; 
+    
+    for (int i = 0; i < 8; i++) {
+        if (i == myID || players[i].hp <= 0) continue; 
+        
+        float dx = players[i].x - myX;
+        float dy = players[i].y - myY;
+        float distSq = dx * dx + dy * dy;
+        float dist = sqrtf(distSq); 
+            
+        if (dist > 1.0f) {
+            if (players[i].hp < myHp) {
+                // Target is weaker: Attack! (Constant pull force = 200.0)
+                if (distSq < preySearchRadius) {
+                    currentSumX += (dx / dist) * 200.0f;
+                    currentSumY += (dy / dist) * 200.0f;
+                }
+            } else {
+                // Target is stronger: Run away! (Only if they enter our fear zone)
+                if (distSq < fearRadiusSq) {
+                    currentSumX -= (dx / dist) * 300.0f;
+                    currentSumY -= (dy / dist) * 300.0f;
+                    
+                    // --- DEFENSIVE SPARK LOGIC ---
+                    // If running away and the enemy gets too close (e.g. < 40px)...
+                    if (distSq < 1600.0f) { 
+                        shouldDropSpark = 1; // ...drop a spark like a landmine!
+                    }
+                }
+            }
+        }
+    }
+
+    // --- 3. OBSTACLES (Survival & Vortex Fields) ---
+    // Sparks: Add both radial (repulsive) and tangential (vortex) forces
+    for (int i = 0; i < 24; i++) {
+        if (spark[i].hp > 0) {
+            float dx = spark[i].x - myX, dy = spark[i].y - myY;
+            float distSq = dx * dx + dy * dy;
+            
+            if (distSq < 200.0f) { 
+                // A) Radial force (pushes straight back)
+                currentSumX -= dx * (4000.0f / distSq);
+                currentSumY -= dy * (4000.0f / distSq);
+                
+                // B) Tangential force (creates a swirl to slide around)
+                // Perpendicular vector to (dx, dy) is (-dy, dx)
+                currentSumX += -dy * (5000.0f / distSq);
+                currentSumY +=  dx * (5000.0f / distSq);
+            }
+        }
+    }
+
+    // Glue: Annoyance rather than threat, react only upon contact
+    for (int i = 0; i < 8; i++) {
+        if (glue[i].hp > 0) {
+            float dx = glue[i].x - myX, dy = glue[i].y - myY;
+            float distSq = dx * dx + dy * dy;
+            if (distSq < 150.0f) {
+                currentSumX -= dx * (500.0f / distSq);
+                currentSumY -= dy * (500.0f / distSq);
+            }
+        }
+    }
+
+    // --- 4. WALLS (Soft Boundaries) ---
+    // Keep the bot away from the absolute edges
+    float wallForce = 100.0f;
+    if (myX < 40.0f) currentSumX += wallForce; 
+    if (myX > gameStats.mapWidth - 40.0f) currentSumX -= wallForce;
+    if (myY < 40.0f) currentSumY += wallForce;
+    if (myY > gameStats.mapHeight - 40.0f) currentSumY -= wallForce;
+
+    // --- 5. MOMENTUM (Movement Smoothing) ---
+    // Blend the new desired direction with the current velocity to prevent jitter
+    momentumX = (momentumX * 0.5f) + (currentSumX * 0.5f);
+    momentumY = (momentumY * 0.5f) + (currentSumY * 0.5f);
+
+    response.angle = atan2f(momentumY, momentumX);
+    response.action = shouldDropSpark;
+
+    return AMCOM_Serialize(AMCOM_MOVE_RESPONSE, &response, sizeof(response), buf);
+}
 
 /**
  * This function will be called each time a valid AMCOM packet is received
