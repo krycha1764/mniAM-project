@@ -29,7 +29,7 @@
 #define MNIAM_SIZE_GLUE 200
 
 #define MNIAM_TRANSISTOR_WAGE 30.0
-#define MNIAM_PLAYER_WAGE 40.0
+#define MNIAM_PLAYER_WAGE 30.0
 
 const char* name = "Testowanko.";
 const char* helloMSG = "Bedziemy sie potykac.";
