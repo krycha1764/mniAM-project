@@ -97,6 +97,8 @@ void AMCOM_Deserialize(AMCOM_Receiver *receiver, void const *data, size_t dataSi
           receiver->receivedPacketState++;
         }
         break;
+      default:
+    	  break;
     }
     if(receiver->receivedPacketState == AMCOM_PACKET_STATE_GOT_WHOLE_PACKET) {
       receiver->receivedPacketState = AMCOM_PACKET_STATE_EMPTY;
