@@ -100,8 +100,8 @@ size_t magic_algorithm(uint8_t* buf) {
     target_x = transistors[closest_index_tran].x;
     target_y = transistors[closest_index_tran].y;
   }else if((closest_index_player != 255)) {
-    target_x = players[closest_index_tran].x;
-    target_y = players[closest_index_tran].y;
+    target_x = players[closest_index_player].x;
+    target_y = players[closest_index_player].y;
   }
   response.angle = calc_angle(myself_x, myself_y, target_x, target_y);
   response.action = 0;
