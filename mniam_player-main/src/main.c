@@ -62,7 +62,6 @@ size_t magic_algorithm(uint8_t* buf) {
   float lowest_dist_player = HUGE_VALF;
   uint8_t closest_index_player = 255;
   float lowest_dist_tran = HUGE_VALF;
-  float lowest_dist_tran_non_waged = HUGE_VALF;
   uint8_t closest_index_tran = 255;
 
   for(uint8_t i = 0; i < MNIAM_MAX_TRANSISTOR; i++) { // najbliższy tranzystor
@@ -102,6 +101,9 @@ size_t magic_algorithm(uint8_t* buf) {
   }else if((closest_index_player != 255)) {
     target_x = players[closest_index_player].x;
     target_y = players[closest_index_player].y;
+  }else {
+    target_x = 0.0;
+    target_y = 0.0;
   }
   response.angle = calc_angle(myself_x, myself_y, target_x, target_y);
   response.action = 0;
