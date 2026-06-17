@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <unistd.h>
 #include <errno.h>
@@ -27,23 +28,79 @@
 #define MNIAM_SIZE_SPARK 25
 #define MNIAM_SIZE_GLUE 200
 
+#define MNIAM_TRANSISTOR_WAGE 30.0
+#define MNIAM_PLAYER_WAGE 30.0
+
 const char* name = "Testowanko.";
 const char* helloMSG = "Bedziemy sie potykac.";
 const char* endMSG = "Wszystko co dobre kiedys sie konczy.";
 
 static AMCOM_IdentifyRequestPayload gameVersion;
 static AMCOM_NewGameRequestPayload gameStats;
-static AMCOM_ObjectState players[8];
-static AMCOM_ObjectState transistors[100];
-static AMCOM_ObjectState glue[8];
-static AMCOM_ObjectState spark[24];
+static AMCOM_ObjectState players[MNIAM_MAX_PLAYER];
+static AMCOM_ObjectState transistors[MNIAM_MAX_TRANSISTOR];
+static AMCOM_ObjectState glue[MNIAM_MAX_GLUE];
+static AMCOM_ObjectState spark[MNIAM_MAX_SPARK];
+
+static float calc_dist(float x1, float y1, float x2, float y2) {
+  return sqrtf(powf((x2-x1), 2) + powf((y2-y1), 2));
+}
+
+static float calc_angle(float x1, float y1, float x2, float y2) {
+  return atan2f((y2-y1), (x2-x1));
+}
 
 size_t magic_algorithm(uint8_t* buf) {
 
-  // tutaj myślimy
-
   AMCOM_MoveResponsePayload response;
-  response.angle = 0;
+
+  float myself_x = players[gameStats.playerNumber].x;
+  float myself_y = players[gameStats.playerNumber].y;
+  float target_x = 0.0;
+  float target_y = 0.0;
+
+  float lowest_dist_player = HUGE_VALF;
+  uint8_t closest_index_player = 255;
+  float lowest_dist_tran = HUGE_VALF;
+  float lowest_dist_tran_non_waged = HUGE_VALF;
+  uint8_t closest_index_tran = 255;
+
+  for(uint8_t i = 0; i < MNIAM_MAX_TRANSISTOR; i++) { // najbliższy tranzystor
+    if(transistors[i].objectType == MNIAM_TYPE_TRANSISTOR) {
+      if(transistors[i].hp <= 0) {
+        continue;
+      }
+      float waged_dist = calc_dist(myself_x, myself_y, transistors[i].x, transistors[i].y) - (transistors[i].hp * MNIAM_TRANSISTOR_WAGE);
+      if(waged_dist < lowest_dist_tran) {
+        lowest_dist_tran = waged_dist;
+        closest_index_tran = i;
+      }
+    }
+  }
+  for(uint8_t i = 0; i < MNIAM_MAX_PLAYER; i++) { // najbliższy gracz o mniejszym hp
+    if(players[i].objectType == MNIAM_TYPE_PLAYER) {
+      if(players[i].hp >= players[gameStats.playerNumber].hp) {
+        continue;
+      }
+      if(players[i].objectNo == gameStats.playerNumber) {
+        continue;
+      }
+      float waged_dist = calc_dist(myself_x, myself_y, players[i].x, players[i].y) - (players[i].hp * MNIAM_PLAYER_WAGE);
+      if(waged_dist < lowest_dist_player) {
+        lowest_dist_player = waged_dist;
+        closest_index_player = i;
+      }
+    }
+  }
+
+  if((lowest_dist_player > lowest_dist_tran) && (closest_index_tran != 255)) { // na co polujemy
+    target_x = transistors[closest_index_tran].x;
+    target_y = transistors[closest_index_tran].y;
+  }else if((closest_index_player != 255)) {
+    target_x = players[closest_index_tran].x;
+    target_y = players[closest_index_tran].y;
+  }
+  response.angle = calc_angle(myself_x, myself_y, target_x, target_y);
   response.action = 0;
   return AMCOM_Serialize(AMCOM_MOVE_RESPONSE, &response, sizeof(response), buf);
 };
