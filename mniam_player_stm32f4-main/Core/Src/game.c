@@ -39,17 +39,16 @@ size_t magic_algorithm(uint8_t* buf) {
         return AMCOM_Serialize(AMCOM_MOVE_RESPONSE, &response, sizeof(response), buf);
     }
 
-    // Retain movement vectors between frames for smooth turning
+    // Momentum vector for smoothness
     static float momentumX = 0.0f;
     static float momentumY = 0.0f;
     
     float currentSumX = 0.0f;
     float currentSumY = 0.0f;
     
-    // Flag to determine if we should drop a defensive spark
     uint8_t shouldDropSpark = 0;
 
-    // Check if there is any food left on the map
+    // Transistors aviability override
     int foodAvailable = 0;
     for (int i = 0; i < 100; i++) {
         if (transistors[i].hp > 0) {
@@ -58,7 +57,7 @@ size_t magic_algorithm(uint8_t* buf) {
         }
     }
 
-    // --- 1. TRANSISTORS (Food Attraction) ---
+    // Transistor vector
     for (int i = 0; i < 100; i++) {
         if (transistors[i].hp > 0) {
             float dx = transistors[i].x - myX;
@@ -72,11 +71,10 @@ size_t magic_algorithm(uint8_t* buf) {
         }
     }
 
-    // --- 2. PLAYERS (Hunter vs Prey Logic) ---
-    // Expand vision to the whole map if food is gone, otherwise focus locally
+    // Players vector
+    // No food == whole map radius
     float preySearchRadius = foodAvailable ? 10000.0f : (gameStats.mapWidth * gameStats.mapWidth + gameStats.mapHeight * gameStats.mapHeight);
     
-    // Fear radius (approx. 200 pixels). Ignore stronger players if they are far away!
     float fearRadiusSq = 40000.0f; 
     
     for (int i = 0; i < 8; i++) {
@@ -89,48 +87,45 @@ size_t magic_algorithm(uint8_t* buf) {
             
         if (dist > 1.0f) {
             if (players[i].hp < myHp) {
-                // Target is weaker: Attack! (Constant pull force = 200.0)
                 if (distSq < preySearchRadius) {
                     currentSumX += (dx / dist) * 200.0f;
                     currentSumY += (dy / dist) * 200.0f;
                 }
             } else {
-                // Target is stronger: Run away! (Only if they enter our fear zone)
                 if (distSq < fearRadiusSq) {
                     currentSumX -= (dx / dist) * 300.0f;
                     currentSumY -= (dy / dist) * 300.0f;
                     
-                    // --- DEFENSIVE SPARK LOGIC ---
-                    // If running away and the enemy gets too close (e.g. < 40px)...
+
+                    // ESD
                     if (distSq < 1600.0f) { 
-                        shouldDropSpark = 1; // ...drop a spark like a landmine!
+                        shouldDropSpark = 1; 
                     }
                 }
             }
         }
     }
 
-    // --- 3. OBSTACLES (Survival & Vortex Fields) ---
-    // Sparks: Add both radial (repulsive) and tangential (vortex) forces
+    // Obstacles
+    // ESD avoidance and side push
     for (int i = 0; i < 24; i++) {
         if (spark[i].hp > 0) {
             float dx = spark[i].x - myX, dy = spark[i].y - myY;
             float distSq = dx * dx + dy * dy;
             
             if (distSq < 200.0f) { 
-                // A) Radial force (pushes straight back)
+                
                 currentSumX -= dx * (4000.0f / distSq);
                 currentSumY -= dy * (4000.0f / distSq);
                 
-                // B) Tangential force (creates a swirl to slide around)
-                // Perpendicular vector to (dx, dy) is (-dy, dx)
+                //side push 
                 currentSumX += -dy * (5000.0f / distSq);
                 currentSumY +=  dx * (5000.0f / distSq);
             }
         }
     }
 
-    // Glue: Annoyance rather than threat, react only upon contact
+    // Glue
     for (int i = 0; i < 8; i++) {
         if (glue[i].hp > 0) {
             float dx = glue[i].x - myX, dy = glue[i].y - myY;
@@ -142,16 +137,14 @@ size_t magic_algorithm(uint8_t* buf) {
         }
     }
 
-    // --- 4. WALLS (Soft Boundaries) ---
-    // Keep the bot away from the absolute edges
+    //Walls avoidance
     float wallForce = 100.0f;
     if (myX < 40.0f) currentSumX += wallForce; 
     if (myX > gameStats.mapWidth - 40.0f) currentSumX -= wallForce;
     if (myY < 40.0f) currentSumY += wallForce;
     if (myY > gameStats.mapHeight - 40.0f) currentSumY -= wallForce;
 
-    // --- 5. MOMENTUM (Movement Smoothing) ---
-    // Blend the new desired direction with the current velocity to prevent jitter
+    //Momentum smoothing
     momentumX = (momentumX * 0.5f) + (currentSumX * 0.5f);
     momentumY = (momentumY * 0.5f) + (currentSumY * 0.5f);
 
