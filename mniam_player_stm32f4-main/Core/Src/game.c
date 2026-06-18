@@ -12,16 +12,17 @@
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
 
+
 const char* name = "Testowanko.";
 const char* helloMSG = "Bedziemy sie potykac.";
 const char* endMSG = "Wszystko co dobre kiedys sie konczy.";
 
 static AMCOM_IdentifyRequestPayload gameVersion;
 static AMCOM_NewGameRequestPayload gameStats;
-static AMCOM_ObjectState players[8];
-static AMCOM_ObjectState transistors[100];
-static AMCOM_ObjectState glue[8];
-static AMCOM_ObjectState spark[24];
+static AMCOM_ObjectState players[MNIAM_MAX_PLAYERS];
+static AMCOM_ObjectState transistors[MNIAM_MAX_TRANSISTORS];
+static AMCOM_ObjectState glue[MNIAM_MAX_GLUE];
+static AMCOM_ObjectState spark[MNIAM_MAX_SPARKS];
 
 size_t magic_algorithm(uint8_t* buf) {
     AMCOM_MoveResponsePayload response;
@@ -58,7 +59,7 @@ size_t magic_algorithm(uint8_t* buf) {
     }
 
     // Transistor vector
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < MNIAM_MAX_TRANSISTORS; i++) {
         if (transistors[i].hp > 0) {
             float dx = transistors[i].x - myX;
             float dy = transistors[i].y - myY;
@@ -77,7 +78,7 @@ size_t magic_algorithm(uint8_t* buf) {
     
     float fearRadiusSq = 40000.0f; 
     
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < MNIAM_MAX_PLAYERS; i++) {
         if (i == myID || players[i].hp <= 0) continue; 
         
         float dx = players[i].x - myX;
@@ -108,7 +109,7 @@ size_t magic_algorithm(uint8_t* buf) {
 
     // Obstacles
     // ESD avoidance and side push
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < MNIAM_MAX_SPARKS; i++) {
         if (spark[i].hp > 0) {
             float dx = spark[i].x - myX, dy = spark[i].y - myY;
             float distSq = dx * dx + dy * dy;
@@ -126,7 +127,7 @@ size_t magic_algorithm(uint8_t* buf) {
     }
 
     // Glue
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < MNIAM_MAX_GLUE; i++) {
         if (glue[i].hp > 0) {
             float dx = glue[i].x - myX, dy = glue[i].y - myY;
             float distSq = dx * dx + dy * dy;
