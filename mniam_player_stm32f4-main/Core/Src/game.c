@@ -172,11 +172,13 @@ void amcomPacketHandler(const AMCOM_Packet* packet, void* userContext) {
 		case AMCOM_IDENTIFY_REQUEST:
 			if(packet->header.length != 4) break;
 			printf("Got AMCOM_IDENTIFY_REQUEST. Responding with AMCOM_IDENTIFY_RESPONSE\n");
-		memcpy(&gameVersion, packet->payload, sizeof(gameVersion));
-		AMCOM_IdentifyResponsePayload identifyResponse;
-		sprintf(identifyResponse.playerName, "%s", name);
-		toSend = AMCOM_Serialize(AMCOM_IDENTIFY_RESPONSE, &identifyResponse, sizeof(identifyResponse), buf);
-		break;
+
+			memcpy(&gameVersion, packet->payload, sizeof(gameVersion));
+
+			AMCOM_IdentifyResponsePayload identifyResponse;
+			sprintf(identifyResponse.playerName, "%s", name);
+			toSend = AMCOM_Serialize(AMCOM_IDENTIFY_RESPONSE, &identifyResponse, sizeof(identifyResponse), buf);
+			break;
 
 		case AMCOM_IDENTIFY_RESPONSE: // how do we get this??
 			printf("Got AMCOM_IDENTIFY_RESPONSE. NOT RESPONDING\n");
@@ -185,17 +187,17 @@ void amcomPacketHandler(const AMCOM_Packet* packet, void* userContext) {
 		case AMCOM_NEW_GAME_REQUEST:
 			if(packet->header.length != 10) break;
 			printf("Got AMCOM_NEW_GAME_REQUEST. Responding with AMCOM_NEW_GAME_RESPONSE\n");
-		memcpy(&gameStats, packet->payload, sizeof(gameStats));
+			memcpy(&gameStats, packet->payload, sizeof(gameStats));
 
-		memset(&players, 0, sizeof(players)); // resetting all objects
-		memset(&transistors, 0, sizeof(transistors));
-		memset(&glue, 0, sizeof(glue));
-		memset(&spark, 0, sizeof(spark));
+			memset(&players, 0, sizeof(players)); // resetting all objects
+			memset(&transistors, 0, sizeof(transistors));
+			memset(&glue, 0, sizeof(glue));
+			memset(&spark, 0, sizeof(spark));
 
-		AMCOM_NewGameResponsePayload newgameResponse;
-		sprintf(newgameResponse.helloMessage, "%s", helloMSG);
-		toSend = AMCOM_Serialize(AMCOM_NEW_GAME_RESPONSE, &newgameResponse, sizeof(newgameResponse), buf);
-		break;
+			AMCOM_NewGameResponsePayload newgameResponse;
+			sprintf(newgameResponse.helloMessage, "%s", helloMSG);
+			toSend = AMCOM_Serialize(AMCOM_NEW_GAME_RESPONSE, &newgameResponse, sizeof(newgameResponse), buf);
+			break;
 
 		case AMCOM_NEW_GAME_RESPONSE: // how do we get this??
 			printf("Got AMCOM_NEW_GAME_RESPONSE. NOT RESPONDING\n");
@@ -205,26 +207,27 @@ void amcomPacketHandler(const AMCOM_Packet* packet, void* userContext) {
 			if(packet->header.length == 0) break;
 			if((packet->header.length % sizeof(AMCOM_ObjectState)) != 0) break;
 			printf("Got AMCOM_OBJECT_UPDATE_REQUEST.\n");
-		uint8_t numPackets = packet->header.length / sizeof(AMCOM_ObjectState);
-		AMCOM_ObjectState object;
-		for(uint8_t n = 0; n < numPackets; n++) {
-			memcpy(&object, packet->payload + n*sizeof(AMCOM_ObjectState), sizeof(AMCOM_ObjectState));
-			switch(object.objectType) {
-				case MNIAM_TYPE_PLAYER:
-					memcpy(players + object.objectNo, &object, sizeof(AMCOM_ObjectState));
-					continue;
-				case MNIAM_TYPE_TRANSISTOR:
-					memcpy(transistors + object.objectNo, &object, sizeof(AMCOM_ObjectState));
-					continue;
-				case MNIAM_TYPE_SPARK:
-					memcpy(spark + object.objectNo, &object, sizeof(AMCOM_ObjectState));
-					continue;
-				case MNIAM_TYPE_GLUE:
-					memcpy(glue + object.objectNo, &object, sizeof(AMCOM_ObjectState));
-					continue;
-				default: // invalid
-					printf("Got invalid object type.\n");
-					continue;
+			uint8_t numPackets = packet->header.length / sizeof(AMCOM_ObjectState);
+
+			AMCOM_ObjectState object;
+			for(uint8_t n = 0; n < numPackets; n++) {
+				memcpy(&object, packet->payload + n*sizeof(AMCOM_ObjectState), sizeof(AMCOM_ObjectState));
+				switch(object.objectType) {
+					case MNIAM_TYPE_PLAYER:
+						memcpy(players + object.objectNo, &object, sizeof(AMCOM_ObjectState));
+						break;
+					case MNIAM_TYPE_TRANSISTOR:
+						memcpy(transistors + object.objectNo, &object, sizeof(AMCOM_ObjectState));
+						break;
+					case MNIAM_TYPE_SPARK:
+						memcpy(spark + object.objectNo, &object, sizeof(AMCOM_ObjectState));
+						break;
+					case MNIAM_TYPE_GLUE:
+						memcpy(glue + object.objectNo, &object, sizeof(AMCOM_ObjectState));
+						break;
+					default: // invalid
+						printf("Got invalid object type.\n");
+						break;
 			}
 		}
 		break;
